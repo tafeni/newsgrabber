@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\WebsiteController;
 use App\Http\Controllers\Admin\TopicController;
 use App\Http\Controllers\Admin\KeywordController;
 use App\Http\Controllers\Admin\ScrapeJobController;
+use App\Http\Controllers\Admin\ScrapedPageController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -38,5 +39,11 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::resource('keywords', KeywordController::class)->only(['store', 'update', 'destroy']);
     
     // Scrape Jobs
-    Route::resource('scrape-jobs', ScrapeJobController::class)->only(['index', 'show']);
+    Route::resource('scrape-jobs', ScrapeJobController::class)->only(['index', 'show', 'destroy']);
+    Route::post('scrape-jobs/bulk-delete', [ScrapeJobController::class, 'bulkDelete'])->name('scrape-jobs.bulk-delete');
+    Route::post('scrape-jobs/clear-old', [ScrapeJobController::class, 'clearOld'])->name('scrape-jobs.clear-old');
+    
+    // Scraped Pages (Content Management)
+    Route::resource('scraped-pages', ScrapedPageController::class)->only(['index', 'destroy']);
+    Route::post('scraped-pages/bulk-delete', [ScrapedPageController::class, 'bulkDelete'])->name('scraped-pages.bulk-delete');
 });

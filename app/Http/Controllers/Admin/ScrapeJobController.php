@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ScrapeJob;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -64,5 +65,42 @@ class ScrapeJobController extends Controller
                 'created_at' => $scrapeJob->created_at->format('Y-m-d H:i:s'),
             ],
         ]);
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy(ScrapeJob $scrapeJob)
+    {
+        $scrapeJob->delete();
+
+        return redirect()->back()->with('success', 'Scrape job deleted successfully.');
+    }
+
+    /**
+     * Remove multiple scrape jobs.
+     */
+    public function bulkDelete(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:scrape_jobs,id',
+        ]);
+
+        ScrapeJob::whereIn('id', $request->ids)->delete();
+
+        return redirect()->back()->with('success', count($request->ids) . ' scrape jobs deleted successfully.');
+    }
+
+    /**
+     * Clear all old scrape jobs.
+     */
+    public function clearOld(Request $request)
+    {
+        $days = $request->input('days', 30);
+        
+        $count = ScrapeJob::where('created_at', '<', now()->subDays($days))->delete();
+
+        return redirect()->back()->with('success', "Deleted {$count} scrape jobs older than {$days} days.");
     }
 }

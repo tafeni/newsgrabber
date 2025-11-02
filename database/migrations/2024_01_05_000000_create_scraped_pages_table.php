@@ -28,19 +28,19 @@ return new class extends Migration
             $table->jsonb('images')->nullable();
             $table->timestamps();
             
-            // Full-text search column
-            DB::statement('ALTER TABLE scraped_pages ADD COLUMN content_tsv tsvector');
-            DB::statement('CREATE INDEX scraped_pages_content_tsv_idx ON scraped_pages USING GIN (content_tsv)');
-            
             // Indexes
             $table->index('scraped_at');
             $table->index('publish_date');
             $table->unique(['canonical_url', 'content_hash'], 'unique_page');
         });
         
-        // Trigger to auto-update tsvector
+        // Full-text search column (after table creation)
+        DB::statement('ALTER TABLE scraped_pages ADD COLUMN content_tsv tsvector');
+        DB::statement('CREATE INDEX scraped_pages_content_tsv_idx ON scraped_pages USING GIN (content_tsv)');
+        
+        // Function to auto-update tsvector
         DB::statement("
-            CREATE FUNCTION scraped_pages_tsvector_update() RETURNS trigger AS $$
+            CREATE FUNCTION scraped_pages_tsvector_update() RETURNS trigger AS \$\$
             BEGIN
                 NEW.content_tsv := 
                     setweight(to_tsvector('english', coalesce(NEW.title, '')), 'A') ||
@@ -48,10 +48,13 @@ return new class extends Migration
                     setweight(to_tsvector('english', coalesce(NEW.content_text, '')), 'C');
                 RETURN NEW;
             END
-            $$ LANGUAGE plpgsql;
-            
+            \$\$ LANGUAGE plpgsql
+        ");
+        
+        // Trigger to call the function
+        DB::statement("
             CREATE TRIGGER tsvectorupdate BEFORE INSERT OR UPDATE ON scraped_pages
-            FOR EACH ROW EXECUTE FUNCTION scraped_pages_tsvector_update();
+            FOR EACH ROW EXECUTE FUNCTION scraped_pages_tsvector_update()
         ");
     }
 

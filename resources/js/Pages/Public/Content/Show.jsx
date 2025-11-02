@@ -18,11 +18,14 @@ export default function Show({ page }) {
 
                     {/* Article Header */}
                     <article className="bg-white rounded-lg shadow-lg overflow-hidden">
-                        <div className="p-8">
-                            <h1 className="text-4xl font-bold text-gray-900 mb-4">{page.title}</h1>
+                        <div className="p-8 md:p-12">
+                            {/* Article Title */}
+                            <h1 className="text-3xl md:text-5xl font-bold text-gray-900 mb-6 leading-tight">
+                                {page.title}
+                            </h1>
 
                             {/* Meta Information */}
-                            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 mb-6 pb-6 border-b border-gray-200">
+                            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 mb-8 pb-8 border-b-2 border-gray-200">
                                 <div className="flex items-center">
                                     <Globe className="h-4 w-4 mr-2" />
                                     <span className="font-medium">{page.website.label}</span>
@@ -44,10 +47,12 @@ export default function Show({ page }) {
                                 </a>
                             </div>
 
-                            {/* Meta Description */}
+                            {/* Meta Description - Lead/Excerpt */}
                             {page.meta_description && (
-                                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                                    <p className="text-gray-700 italic">{page.meta_description}</p>
+                                <div className="mb-8 p-6 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border-l-4 border-blue-500">
+                                    <p className="text-lg text-gray-700 italic leading-relaxed font-serif">
+                                        {page.meta_description}
+                                    </p>
                                 </div>
                             )}
 
@@ -80,14 +85,14 @@ export default function Show({ page }) {
 
                             {/* Images */}
                             {page.images && page.images.length > 0 && (
-                                <div className="mb-6">
+                                <div className="mb-10">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {page.images.slice(0, 4).map((image, index) => (
                                             <img
                                                 key={index}
                                                 src={image}
                                                 alt={`Article image ${index + 1}`}
-                                                className="w-full h-48 object-cover rounded-lg"
+                                                className="w-full h-64 object-cover rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300"
                                                 onError={(e) => {
                                                     e.target.style.display = 'none';
                                                 }}
@@ -98,12 +103,35 @@ export default function Show({ page }) {
                             )}
 
                             {/* Content */}
-                            <div className="prose prose-lg max-w-none">
+                            <div className="mt-8">
                                 {page.content_html ? (
-                                    <div dangerouslySetInnerHTML={{ __html: page.content_html }} />
+                                    <div 
+                                        className="prose prose-lg max-w-none prose-headings:font-bold prose-headings:text-gray-900 prose-p:text-gray-700 prose-p:leading-relaxed prose-p:mb-6 prose-a:text-blue-600 prose-strong:text-gray-900"
+                                        dangerouslySetInnerHTML={{ __html: page.content_html }} 
+                                    />
                                 ) : (
-                                    <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
-                                        {page.content_text}
+                                    <div className="article-content">
+                                        {page.content_text.split('\n\n').map((paragraph, index) => {
+                                            if (!paragraph.trim()) return null;
+                                            
+                                            return (
+                                                <p
+                                                    key={index}
+                                                    className={`text-gray-700 leading-relaxed mb-6 ${
+                                                        index === 0 
+                                                            ? 'text-lg first-letter:text-7xl first-letter:font-bold first-letter:text-gray-900 first-letter:mr-2 first-letter:float-left first-letter:leading-none first-letter:mt-1' 
+                                                            : 'text-base'
+                                                    }`}
+                                                    style={{ 
+                                                        textAlign: 'justify',
+                                                        lineHeight: '1.8',
+                                                        fontSize: index === 0 ? '1.125rem' : '1rem'
+                                                    }}
+                                                >
+                                                    {paragraph.trim()}
+                                                </p>
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>

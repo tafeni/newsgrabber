@@ -25,7 +25,14 @@ class ScraperService
             'timeout' => config('scraper.timeout', 30),
             'verify' => false,
             'headers' => [
-                'User-Agent' => config('scraper.user_agent', 'NewsGrabber/1.0'),
+                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language' => 'en-US,en;q=0.9',
+                'Accept-Encoding' => 'gzip, deflate',
+                'DNT' => '1',
+                'Connection' => 'keep-alive',
+                'Upgrade-Insecure-Requests' => '1',
+                'Cache-Control' => 'max-age=0',
             ],
         ]);
     }
@@ -39,11 +46,12 @@ class ScraperService
         $pagesScraped = 0;
         $pagesMatched = 0;
         $errors = [];
+        $maxArticles = config('scraper.max_articles_per_run', 10);
 
         try {
             Log::info("Starting scrape for website: {$website->label}");
 
-            // Fetch the main page
+            // Fetch the main page to find article links
             $response = $this->fetchUrl($website->url);
 
             if (!$response['success']) {
@@ -51,24 +59,60 @@ class ScraperService
                 throw new \Exception($response['error']);
             }
 
-            // Extract content
-            $extractedData = $this->contentExtractor->extractContent(
+            // Discover article links from homepage
+            $articleUrls = $this->contentExtractor->extractArticleLinks(
                 $response['html'],
                 $website->url
             );
 
-            // Match keywords
-            $matches = $this->keywordMatcher->matchKeywords(
-                $extractedData['content_text'],
-                $extractedData['title'] ?? ''
-            );
+            Log::info("Found " . count($articleUrls) . " article links on {$website->label}");
 
-            $pagesScraped++;
+            // Limit the number of articles to scrape
+            $articleUrls = array_slice($articleUrls, 0, $maxArticles);
 
-            // Only save if there are keyword matches
-            if (!empty($matches)) {
-                $this->savePage($website, $extractedData, $matches, $website->url);
-                $pagesMatched++;
+            // Scrape each article
+            foreach ($articleUrls as $articleUrl) {
+                // Respect rate limiting
+                $this->respectRateLimit($website);
+
+                try {
+                    // Fetch article
+                    $articleResponse = $this->fetchUrl($articleUrl);
+
+                    if (!$articleResponse['success']) {
+                        $errors[] = "Failed to fetch {$articleUrl}: {$articleResponse['error']}";
+                        continue;
+                    }
+
+                    // Extract content
+                    $extractedData = $this->contentExtractor->extractContent(
+                        $articleResponse['html'],
+                        $articleUrl
+                    );
+
+                    // Match keywords
+                    $matches = $this->keywordMatcher->matchKeywords(
+                        $extractedData['content_text'],
+                        $extractedData['title'] ?? ''
+                    );
+
+                    $pagesScraped++;
+
+                    // Only save if there are keyword matches
+                    if (!empty($matches)) {
+                        $saved = $this->savePage($website, $extractedData, $matches, $articleUrl);
+                        if ($saved) {
+                            $pagesMatched++;
+                            Log::info("Saved article: {$extractedData['title']}");
+                        }
+                    } else {
+                        Log::debug("No keyword matches for: {$extractedData['title']}");
+                    }
+
+                } catch (\Exception $e) {
+                    $errors[] = "Error scraping {$articleUrl}: {$e->getMessage()}";
+                    Log::error("Error scraping article: {$e->getMessage()}");
+                }
             }
 
             // Update website last scraped timestamp
@@ -107,6 +151,20 @@ class ScraperService
                 'errors' => array_merge($errors, [$error]),
             ];
         }
+    }
+
+    /**
+     * Respect rate limiting between requests.
+     */
+    private function respectRateLimit(Website $website): void
+    {
+        // Calculate delay in milliseconds for faster scraping
+        $delayMs = (60 / $website->rate_limit_per_minute) * 1000000; // microseconds
+        
+        // Minimum 0.5 second delay, maximum 3 seconds
+        $delayMs = max(500000, min($delayMs, 3000000));
+        
+        usleep((int)$delayMs);
     }
 
     /**

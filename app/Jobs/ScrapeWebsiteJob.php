@@ -18,6 +18,7 @@ class ScrapeWebsiteJob implements ShouldQueue
 
     public $tries = 3;
     public $backoff = [60, 300, 900]; // 1min, 5min, 15min
+    public $timeout = 300; // 5 minutes
 
     /**
      * Create a new job instance.

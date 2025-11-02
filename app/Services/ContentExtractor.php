@@ -7,10 +7,15 @@ use Symfony\Component\DomCrawler\Crawler;
 class ContentExtractor
 {
     private const REMOVAL_SELECTORS = [
-        'nav', 'header', 'footer', 'aside', 'script', 'style', 'iframe',
+        'nav', 'header', 'footer', 'aside', 'script', 'style', 'iframe', 'noscript',
         '.navigation', '.nav', '.header', '.footer', '.sidebar', '.menu',
-        '.advertisement', '.ad', '.social', '.share', '.comments', '.related',
-        '#nav', '#header', '#footer', '#sidebar', '#menu'
+        '.advertisement', '.ad', '.ads', '.social', '.share', '.comments', '.related',
+        '#nav', '#header', '#footer', '#sidebar', '#menu',
+        '.wp-caption-text', '.gallery', '.attachment', '.byline', '.author-box',
+        '.tags', '.post-tags', '.share-buttons', '.social-share', '.newsletter',
+        '.popup', '.modal', '.cookie', '.gdpr', '.promo', '.sponsor',
+        '[class*="ad-"]', '[id*="ad-"]', '[class*="banner"]', '[class*="widget"]',
+        '.related-posts', '.you-may-like', '.recommended', '.trending',
     ];
 
     /**
@@ -30,6 +35,114 @@ class ContentExtractor
             'images' => $this->extractImages($crawler, $url),
             'language' => $this->extractLanguage($crawler),
         ];
+    }
+
+    /**
+     * Extract article links from homepage.
+     */
+    public function extractArticleLinks(string $html, string $baseUrl): array
+    {
+        $crawler = new Crawler($html, $baseUrl);
+        $links = [];
+        $seen = [];
+
+        try {
+            // Find all article links - common patterns for news sites
+            $crawler->filter('a[href]')->each(function (Crawler $node) use (&$links, &$seen, $baseUrl) {
+                try {
+                    $href = $node->attr('href');
+                    
+                    // Convert relative URLs to absolute
+                    $absoluteUrl = $this->normalizeUrl($href, $baseUrl);
+                    
+                    // Filter out unwanted URLs
+                    if ($this->isValidArticleUrl($absoluteUrl, $baseUrl) && !isset($seen[$absoluteUrl])) {
+                        $links[] = $absoluteUrl;
+                        $seen[$absoluteUrl] = true;
+                    }
+                } catch (\Exception $e) {
+                    // Skip invalid links
+                }
+            });
+        } catch (\Exception $e) {
+            // Return empty array if extraction fails
+        }
+
+        return array_unique($links);
+    }
+
+    /**
+     * Check if URL is likely an article URL.
+     */
+    private function isValidArticleUrl(string $url, string $baseUrl): bool
+    {
+        $parsed = parse_url($url);
+        $baseParsed = parse_url($baseUrl);
+
+        // Must have same domain
+        if (!isset($parsed['host']) || $parsed['host'] !== $baseParsed['host']) {
+            return false;
+        }
+
+        // Must have a path
+        if (!isset($parsed['path']) || $parsed['path'] === '/' || $parsed['path'] === '') {
+            return false;
+        }
+
+        $path = strtolower($parsed['path']);
+
+        // Exclude common non-article URLs
+        $excludePatterns = [
+            '/tag/', '/category/', '/author/', '/page/', '/search/',
+            '/login', '/register', '/cart', '/checkout', '/account',
+            '/wp-admin', '/wp-content', '/wp-includes',
+            '.jpg', '.jpeg', '.png', '.gif', '.pdf', '.zip',
+            '/feed', '/rss', '/sitemap', '/privacy', '/terms',
+            '/contact', '/about', '/advertise',
+        ];
+
+        foreach ($excludePatterns as $pattern) {
+            if (strpos($path, $pattern) !== false) {
+                return false;
+            }
+        }
+
+        // Must have reasonable path depth (typically articles have /year/month/slug or /category/slug)
+        $pathParts = explode('/', trim($path, '/'));
+        if (count($pathParts) < 1 || count($pathParts) > 6) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Normalize URL to absolute.
+     */
+    private function normalizeUrl(string $url, string $baseUrl): string
+    {
+        // Already absolute
+        if (filter_var($url, FILTER_VALIDATE_URL)) {
+            return $url;
+        }
+
+        $base = parse_url($baseUrl);
+        $scheme = $base['scheme'] ?? 'https';
+        $host = $base['host'] ?? '';
+
+        // Protocol-relative URL
+        if (strpos($url, '//') === 0) {
+            return $scheme . ':' . $url;
+        }
+
+        // Absolute path
+        if (strpos($url, '/') === 0) {
+            return $scheme . '://' . $host . $url;
+        }
+
+        // Relative path
+        $basePath = isset($base['path']) ? dirname($base['path']) : '';
+        return $scheme . '://' . $host . $basePath . '/' . $url;
     }
 
     /**
@@ -168,12 +281,17 @@ class ContentExtractor
             return '';
         }
 
+        // Clone the content to avoid modifying original
+        $clonedContent = clone $content;
+
         // Remove unwanted elements
         foreach (self::REMOVAL_SELECTORS as $selector) {
             try {
-                $content->filter($selector)->each(function (Crawler $node) {
+                $clonedContent->filter($selector)->each(function (Crawler $node) {
                     foreach ($node as $domNode) {
-                        $domNode->parentNode->removeChild($domNode);
+                        if ($domNode->parentNode) {
+                            $domNode->parentNode->removeChild($domNode);
+                        }
                     }
                 });
             } catch (\Exception $e) {
@@ -181,9 +299,29 @@ class ContentExtractor
             }
         }
 
-        // Extract text
+        // Extract text from paragraphs to preserve structure
         try {
-            $text = $content->text();
+            $paragraphs = [];
+            
+            // Try to get paragraph text
+            $clonedContent->filter('p')->each(function (Crawler $p) use (&$paragraphs) {
+                try {
+                    $text = trim($p->text());
+                    if (!empty($text) && strlen($text) > 20) { // Skip very short paragraphs
+                        $paragraphs[] = $text;
+                    }
+                } catch (\Exception $e) {
+                    // Skip
+                }
+            });
+
+            // If we have paragraphs, join them
+            if (!empty($paragraphs)) {
+                return $this->normalizeWhitespace(implode("\n\n", $paragraphs));
+            }
+
+            // Fallback to getting all text
+            $text = $clonedContent->text();
             return $this->normalizeWhitespace($text);
         } catch (\Exception $e) {
             return '';
@@ -217,6 +355,35 @@ class ContentExtractor
      */
     private function getMainContentNode(Crawler $crawler): ?Crawler
     {
+        // Try common article content selectors (WordPress and common CMS patterns)
+        $articleSelectors = [
+            '.entry-content',          // WordPress default
+            '.post-content',           // Common alternative
+            '.article-content',        // News sites
+            '.story-content',          // News sites
+            '.content-body',           // Generic
+            'article .content',        // Semantic
+            '.article-body',           // News sites
+            '[itemprop="articleBody"]', // Schema.org
+            '.post-body',              // Blogs
+            '#content article',        // Common pattern
+        ];
+        
+        foreach ($articleSelectors as $selector) {
+            try {
+                $node = $crawler->filter($selector);
+                if ($node->count() > 0) {
+                    $text = $node->first()->text();
+                    // Must have substantial content (at least 100 characters)
+                    if (strlen($text) > 100) {
+                        return $node->first();
+                    }
+                }
+            } catch (\Exception $e) {
+                continue;
+            }
+        }
+
         // Try semantic HTML5 elements
         $semanticSelectors = ['article', 'main', '[role="main"]'];
         
@@ -224,24 +391,31 @@ class ContentExtractor
             try {
                 $node = $crawler->filter($selector);
                 if ($node->count() > 0) {
-                    return $node->first();
+                    $text = $node->first()->text();
+                    // Must have substantial content
+                    if (strlen($text) > 100) {
+                        return $node->first();
+                    }
                 }
             } catch (\Exception $e) {
                 continue;
             }
         }
 
-        // Find largest text-containing node
+        // Find largest text-containing node with paragraph content
         try {
             $maxLength = 0;
             $bestNode = null;
 
             $crawler->filter('div, section, article')->each(function (Crawler $node) use (&$maxLength, &$bestNode) {
                 try {
+                    // Count paragraphs to ensure it's actual article content
+                    $paragraphCount = $node->filter('p')->count();
                     $text = $node->text();
                     $length = strlen($text);
                     
-                    if ($length > $maxLength) {
+                    // Must have multiple paragraphs and substantial length
+                    if ($paragraphCount >= 2 && $length > $maxLength && $length > 200) {
                         $maxLength = $length;
                         $bestNode = $node;
                     }

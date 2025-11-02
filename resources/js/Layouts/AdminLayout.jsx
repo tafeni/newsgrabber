@@ -1,5 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
-import { Menu, X, Home, Globe, Tag, Clock, LogOut } from 'lucide-react';
+import { Menu, X, Home, Globe, Tag, Clock, LogOut, FileText } from 'lucide-react';
 import { useState } from 'react';
 
 export default function AdminLayout({ children }) {
@@ -11,6 +11,7 @@ export default function AdminLayout({ children }) {
         { name: 'Websites', href: '/admin/websites', icon: Globe },
         { name: 'Topics', href: '/admin/topics', icon: Tag },
         { name: 'Scrape Jobs', href: '/admin/scrape-jobs', icon: Clock },
+        { name: 'Scraped Content', href: '/admin/scraped-pages', icon: FileText },
     ];
 
     return (
