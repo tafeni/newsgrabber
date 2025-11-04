@@ -38,37 +38,71 @@ class ContentExtractor
     }
 
     /**
-     * Extract article links from homepage.
+     * Extract article links from homepage, prioritizing recent content.
      */
     public function extractArticleLinks(string $html, string $baseUrl): array
     {
         $crawler = new Crawler($html, $baseUrl);
-        $links = [];
+        $priorityLinks = [];
+        $regularLinks = [];
         $seen = [];
 
         try {
-            // Find all article links - common patterns for news sites
-            $crawler->filter('a[href]')->each(function (Crawler $node) use (&$links, &$seen, $baseUrl) {
+            // Priority 1: Try to find articles in "latest", "recent", or "news" sections
+            $prioritySelectors = [
+                '.latest-posts a', '.recent-posts a', '.latest-news a',
+                '.latest-articles a', '#latest a', '#recent a',
+                '[class*="latest"] a', '[class*="recent"] a',
+                'section.news a', '.news-list a', '.article-list a',
+            ];
+
+            foreach ($prioritySelectors as $selector) {
+                try {
+                    $crawler->filter($selector)->each(function (Crawler $node) use (&$priorityLinks, &$seen, $baseUrl) {
+                        try {
+                            $href = $node->attr('href');
+                            $absoluteUrl = $this->normalizeUrl($href, $baseUrl);
+                            
+                            if ($this->isValidArticleUrl($absoluteUrl, $baseUrl) && !isset($seen[$absoluteUrl])) {
+                                $priorityLinks[] = $absoluteUrl;
+                                $seen[$absoluteUrl] = true;
+                            }
+                        } catch (\Exception $e) {
+                            // Skip
+                        }
+                    });
+                } catch (\Exception $e) {
+                    continue;
+                }
+            }
+
+            // Priority 2: Look for links with dates in URL (e.g., /2025/11/04/article)
+            $crawler->filter('a[href]')->each(function (Crawler $node) use (&$priorityLinks, &$regularLinks, &$seen, $baseUrl) {
                 try {
                     $href = $node->attr('href');
-                    
-                    // Convert relative URLs to absolute
                     $absoluteUrl = $this->normalizeUrl($href, $baseUrl);
                     
-                    // Filter out unwanted URLs
                     if ($this->isValidArticleUrl($absoluteUrl, $baseUrl) && !isset($seen[$absoluteUrl])) {
-                        $links[] = $absoluteUrl;
+                        // Check if URL contains recent date pattern (2024 or 2025)
+                        if (preg_match('#/(202[4-5])/(0[1-9]|1[0-2])/#', $absoluteUrl)) {
+                            $priorityLinks[] = $absoluteUrl;
+                        } else {
+                            $regularLinks[] = $absoluteUrl;
+                        }
                         $seen[$absoluteUrl] = true;
                     }
                 } catch (\Exception $e) {
                     // Skip invalid links
                 }
             });
-        } catch (\Exception $e) {
-            // Return empty array if extraction fails
-        }
 
-        return array_unique($links);
+            // Combine: priority links first, then regular links
+            $allLinks = array_merge($priorityLinks, $regularLinks);
+            
+            return array_values(array_unique($allLinks));
+        } catch (\Exception $e) {
+            return [];
+        }
     }
 
     /**
