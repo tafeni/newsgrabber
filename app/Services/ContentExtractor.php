@@ -79,20 +79,37 @@ class ContentExtractor
                 }
             }
 
-            // Priority 2: Look for links with current week date patterns in URL
-            $currentYear = date('Y');
-            $currentMonth = date('m');
-            $lastMonth = date('m', strtotime('-1 month'));
+            // Priority 2: Look for links with recent date patterns in URL
+            // Build date range based on max_content_age_days config
+            $maxAgeDays = config('scraper.max_content_age_days', 14);
+            $datePatterns = [];
             
-            $crawler->filter('a[href]')->each(function (Crawler $node) use (&$priorityLinks, &$regularLinks, &$seen, $baseUrl, $currentYear, $currentMonth, $lastMonth) {
+            if ($maxAgeDays > 0) {
+                // Generate patterns for each month within the age range
+                for ($i = 0; $i <= ceil($maxAgeDays / 30); $i++) {
+                    $date = strtotime("-{$i} months");
+                    $year = date('Y', $date);
+                    $month = date('m', $date);
+                    $datePatterns[] = "/{$year}/{$month}/";
+                }
+            }
+            
+            $crawler->filter('a[href]')->each(function (Crawler $node) use (&$priorityLinks, &$regularLinks, &$seen, $baseUrl, $datePatterns) {
                 try {
                     $href = $node->attr('href');
                     $absoluteUrl = $this->normalizeUrl($href, $baseUrl);
                     
                     if ($this->isValidArticleUrl($absoluteUrl, $baseUrl) && !isset($seen[$absoluteUrl])) {
-                        // Check if URL contains current month/year pattern
-                        if (preg_match("#/{$currentYear}/{$currentMonth}/#", $absoluteUrl) ||
-                            preg_match("#/{$currentYear}/{$lastMonth}/#", $absoluteUrl)) {
+                        // Check if URL contains recent date pattern
+                        $isRecent = false;
+                        foreach ($datePatterns as $pattern) {
+                            if (strpos($absoluteUrl, $pattern) !== false) {
+                                $isRecent = true;
+                                break;
+                            }
+                        }
+                        
+                        if ($isRecent) {
                             $priorityLinks[] = $absoluteUrl;
                         } else {
                             $regularLinks[] = $absoluteUrl;
