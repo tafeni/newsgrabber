@@ -23,4 +23,7 @@ return [
     'store_raw_html' => env('SCRAPER_STORE_RAW_HTML', false),
     
     'max_content_size' => env('SCRAPER_MAX_CONTENT_SIZE', 5000000),
+    
+    // Only scrape content from the last X days (0 = no limit)
+    'max_content_age_days' => env('SCRAPER_MAX_CONTENT_AGE_DAYS', 7),
 ];

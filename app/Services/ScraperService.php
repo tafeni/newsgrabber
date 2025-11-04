@@ -90,20 +90,35 @@ class ScraperService
                         $articleUrl
                     );
 
+                    $pagesScraped++;
+
+                    // Check if content is within the allowed age range
+                    $maxAgeDays = config('scraper.max_content_age_days', 7);
+                    if ($maxAgeDays > 0) {
+                        $publishDate = $extractedData['publish_date'];
+                        
+                        if ($publishDate) {
+                            $contentAge = now()->diffInDays($publishDate);
+                            
+                            if ($contentAge > $maxAgeDays) {
+                                Log::debug("Skipping old article ({$contentAge} days old): {$extractedData['title']}");
+                                continue;
+                            }
+                        }
+                    }
+
                     // Match keywords
                     $matches = $this->keywordMatcher->matchKeywords(
                         $extractedData['content_text'],
                         $extractedData['title'] ?? ''
                     );
 
-                    $pagesScraped++;
-
                     // Only save if there are keyword matches
                     if (!empty($matches)) {
                         $saved = $this->savePage($website, $extractedData, $matches, $articleUrl);
                         if ($saved) {
                             $pagesMatched++;
-                            Log::info("Saved article: {$extractedData['title']}");
+                            Log::info("Saved article: {$extractedData['title']} (Published: {$extractedData['publish_date']})");
                         }
                     } else {
                         Log::debug("No keyword matches for: {$extractedData['title']}");

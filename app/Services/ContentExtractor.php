@@ -48,12 +48,15 @@ class ContentExtractor
         $seen = [];
 
         try {
-            // Priority 1: Try to find articles in "latest", "recent", or "news" sections
+            // Priority 1: Try to find articles in "latest", "recent", "today", "this week" or "news" sections
             $prioritySelectors = [
                 '.latest-posts a', '.recent-posts a', '.latest-news a',
                 '.latest-articles a', '#latest a', '#recent a',
                 '[class*="latest"] a', '[class*="recent"] a',
+                '[class*="today"] a', '[class*="this-week"] a',
+                '[class*="breaking"] a', '[class*="trending"] a',
                 'section.news a', '.news-list a', '.article-list a',
+                '.today a', '.this-week a', '.breaking-news a',
             ];
 
             foreach ($prioritySelectors as $selector) {
@@ -76,15 +79,20 @@ class ContentExtractor
                 }
             }
 
-            // Priority 2: Look for links with dates in URL (e.g., /2025/11/04/article)
-            $crawler->filter('a[href]')->each(function (Crawler $node) use (&$priorityLinks, &$regularLinks, &$seen, $baseUrl) {
+            // Priority 2: Look for links with current week date patterns in URL
+            $currentYear = date('Y');
+            $currentMonth = date('m');
+            $lastMonth = date('m', strtotime('-1 month'));
+            
+            $crawler->filter('a[href]')->each(function (Crawler $node) use (&$priorityLinks, &$regularLinks, &$seen, $baseUrl, $currentYear, $currentMonth, $lastMonth) {
                 try {
                     $href = $node->attr('href');
                     $absoluteUrl = $this->normalizeUrl($href, $baseUrl);
                     
                     if ($this->isValidArticleUrl($absoluteUrl, $baseUrl) && !isset($seen[$absoluteUrl])) {
-                        // Check if URL contains recent date pattern (2024 or 2025)
-                        if (preg_match('#/(202[4-5])/(0[1-9]|1[0-2])/#', $absoluteUrl)) {
+                        // Check if URL contains current month/year pattern
+                        if (preg_match("#/{$currentYear}/{$currentMonth}/#", $absoluteUrl) ||
+                            preg_match("#/{$currentYear}/{$lastMonth}/#", $absoluteUrl)) {
                             $priorityLinks[] = $absoluteUrl;
                         } else {
                             $regularLinks[] = $absoluteUrl;
