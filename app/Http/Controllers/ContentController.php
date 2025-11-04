@@ -26,9 +26,10 @@ class ContentController extends Controller
 
         // Filter by topic
         if ($topicId = $request->input('topic')) {
-            $query->whereJsonContains('matched_keywords', function($q) use ($topicId) {
-                return ['topic_id' => (int)$topicId];
-            });
+            // Use raw PostgreSQL JSON query for better compatibility
+            $query->whereRaw("matched_keywords::jsonb @> ?::jsonb", [
+                json_encode([['topic_id' => (int)$topicId]])
+            ]);
         }
 
         // Filter by keyword
@@ -56,8 +57,8 @@ class ContentController extends Controller
         $pages = $query->paginate(24)->through(fn($page) => [
             'id' => $page->id,
             'title' => $page->title,
-            'excerpt' => $page->excerpt,
-            'thumbnail' => $page->thumbnail,
+            'excerpt' => $page->excerpt ?? ($page->meta_description ? substr($page->meta_description, 0, 200) : substr($page->content_text, 0, 200)),
+            'thumbnail' => $page->thumbnail ?? ($page->images[0] ?? null),
             'publish_date' => $page->publish_date?->format('M d, Y'),
             'website' => [
                 'label' => $page->website->label,

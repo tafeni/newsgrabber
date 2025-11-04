@@ -66,7 +66,7 @@ export default function Index({ pages, topics, websites, filters }) {
                     {/* Filters Panel */}
                     {showFilters && (
                         <div className="mb-6 p-6 bg-white border border-gray-200 rounded-lg shadow-sm">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                 {/* Topic Filter */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -107,7 +107,7 @@ export default function Index({ pages, topics, websites, filters }) {
                                     </select>
                                 </div>
 
-                                {/* Date Range */}
+                                {/* From Date */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         <Calendar className="inline h-4 w-4 mr-1" />
@@ -117,6 +117,20 @@ export default function Index({ pages, topics, websites, filters }) {
                                         type="date"
                                         value={filters.from || ''}
                                         onChange={(e) => handleFilterChange('from', e.target.value)}
+                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-900 focus:ring-gray-900"
+                                    />
+                                </div>
+
+                                {/* To Date */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        <Calendar className="inline h-4 w-4 mr-1" />
+                                        To Date
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={filters.to || ''}
+                                        onChange={(e) => handleFilterChange('to', e.target.value)}
                                         className="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-900 focus:ring-gray-900"
                                     />
                                 </div>
@@ -133,7 +147,7 @@ export default function Index({ pages, topics, websites, filters }) {
                     )}
 
                     {/* Active Filters */}
-                    {(filters.search || filters.topic || filters.website || filters.from) && (
+                    {(filters.search || filters.topic || filters.website || filters.from || filters.to) && (
                         <div className="mb-4 flex flex-wrap gap-2">
                             {filters.search && (
                                 <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
@@ -142,12 +156,22 @@ export default function Index({ pages, topics, websites, filters }) {
                             )}
                             {filters.topic && (
                                 <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                                    Topic Filter Active
+                                    Topic: {topics.find(t => t.id == filters.topic)?.name || 'Selected'}
                                 </span>
                             )}
                             {filters.website && (
                                 <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                                    Source Filter Active
+                                    Source: {websites.find(w => w.id == filters.website)?.label || 'Selected'}
+                                </span>
+                            )}
+                            {filters.from && (
+                                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
+                                    From: {filters.from}
+                                </span>
+                            )}
+                            {filters.to && (
+                                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
+                                    To: {filters.to}
                                 </span>
                             )}
                         </div>
