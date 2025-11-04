@@ -13,10 +13,10 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         // Run scraper every hour (PRODUCTION)
-        // $schedule->command('scraper:scheduled')->hourly();
-        
+        $schedule->command('scraper:scheduled')->hourly();
+
         // Run scraper every minute (TESTING ONLY - uncomment to test)
-        $schedule->command('scraper:scheduled')->everyMinute();
+        // $schedule->command('scraper:scheduled')->everyMinute();
     }
 
     /**
